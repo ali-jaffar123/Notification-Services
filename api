@@ -1,10 +1,11 @@
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import os
 from datetime import datetime
 import logging
+from emailNotification.email import create_email_content, send_email
+from database.db import save_notification_log, get_notification_log
 
 app = FastAPI(title="Notification Service")
 logging.basicConfig(level=logging.INFO)
@@ -34,18 +35,29 @@ class NotificationLog(BaseModel):
 @app.post("/send-notification", response_model=NotificationResponse)
 async def send_notification(request: NotificationRequest):
     try:
-        # Placeholder for email and database integration
+        # Create email content
+        subject, html_content = create_email_content(request.notification_type, request.content)
+        
+        # Send email
+        success = await send_email(request.email, subject, html_content)
+        
+        # Prepare log
         log_entry = {
-            "notification_id": "1",  # Temporary ID
             "user_id": request.user_id,
             "email": request.email,
             "notification_type": request.notification_type,
-            "status": "success",
+            "status": "success" if success else "failed",
+            "error": None if success else "Email sending failed",
             "timestamp": datetime.utcnow().isoformat()
         }
+        
+        # Save to MongoDB
+        notification_id = await save_notification_log(log_entry)
+        log_entry["notification_id"] = notification_id
+        
         return NotificationResponse(
             status=log_entry["status"],
-            notification_id=log_entry["notification_id"],
+            notification_id=notification_id,
             timestamp=log_entry["timestamp"]
         )
     except Exception as e:
@@ -53,9 +65,8 @@ async def send_notification(request: NotificationRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/notification-log/{notification_id}", response_model=NotificationLog)
-async def get_notification_log(notification_id: str):
-    # Placeholder for database retrieval
-    log = {"notification_id": notification_id}  # Dummy response
+async def get_notification_log_endpoint(notification_id: str):
+    log = await get_notification_log(notification_id)
     if not log:
         raise HTTPException(status_code=404, detail="Notification not found")
     return NotificationLog(**log)
