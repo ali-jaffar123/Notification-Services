@@ -1,1 +1,58 @@
 
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
+
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+
+def create_email_content(notification_type: str, content: dict) -> tuple:
+    subject = ""
+    html_content = ""
+    
+    if notification_type == "order_confirmation":
+        subject = f"Order Confirmation - Order #{content.get('order_id')}"
+        html_content = f"""
+        <html>
+            <body>
+                <h2>Order Confirmation</h2>
+                <p>Thank you for your order!</p>
+                <p>Order ID: {content.get('order_id')}</p>
+                <p>Total: ${content.get('total')}</p>
+            </body>
+        </html>
+        """
+    elif notification_type == "shipment_update":
+        subject = f"Shipment Update - Order #{content.get('order_id')}"
+        html_content = f"""
+        <html>
+            <body>
+                <h2>Shipment Update</h2>
+                <p>Your order has been shipped!</p>
+                <p>Order ID: {content.get('order_id')}</p>
+                <p>Tracking Number: {content.get('tracking_number')}</p>
+            </body>
+        </html>
+        """
+    
+    return subject, html_content
+
+async def send_email(to_email: str, subject: str, html_content: str) -> bool:
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_USER
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(html_content, 'html'))
+
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"Failed to send email: {str(e)}")
+        return False
