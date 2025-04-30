@@ -1,1 +1,16 @@
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+from datetime import datetime
 
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongodb:27017")
+client = AsyncIOMotorClient(MONGO_URI)
+db = client.notification_db
+collection = db.notifications
+
+async def save_notification_log(notification: dict):
+    notification['timestamp'] = datetime.utcnow().isoformat()
+    result = await collection.insert_one(notification)
+    return str(result.inserted_id)
+
+async def get_notification_log(notification_id: str):
+    return await collection.find_one({"notification_id": notification_id})
